@@ -30,10 +30,14 @@ function lsSet<T = any>(key: string, value: T): void {
 }
 
 import { t } from '../i18n'
+import { preferNameFromTelegram } from '../telegram'
 
 export function getPlayerName(): string {
-  const name = lsGet<string | null>(NAME_KEY, null)
-  return name && name.trim().length > 0 ? name : t('leaderboard.player')
+  const name = (lsGet<string | null>(NAME_KEY, null) || '').trim()
+  if (name) return name
+  const tgName = preferNameFromTelegram()
+  if (tgName) return tgName
+  return t('leaderboard.player')
 }
 
 export function setPlayerName(name: string): void {
