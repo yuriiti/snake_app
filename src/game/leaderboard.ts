@@ -2,7 +2,14 @@
 // Хранится отдельно для каждого уровня по ключу уровня
 
 import { t } from "../i18n";
-import { preferNameFromTelegram } from "../telegram";
+import {
+  preferNameFromTelegram,
+  getTelegramUser,
+  getInitDataField,
+  getTelegramHash,
+  getTelegramInitData,
+} from "../telegram";
+import { EDGE_LEADERBOARD_URL } from "../config";
 import { markLevelCompleted } from "../levels/store";
 
 export type ScoreEntry = {
@@ -53,6 +60,55 @@ export function saveLeaderboard(levelKey: string, entries: ScoreEntry[]) {
   lsSet(STORAGE_PREFIX + levelKey, entries);
 }
 
+// Try to send result to Supabase Edge Function (fire-and-forget)
+async function postRemoteResult(
+  levelKey: string,
+  timeMs: number,
+  steps: number,
+  name: string
+) {
+  try {
+    // Only attempt if we have Telegram context with hash for verification
+    const user = getTelegramUser();
+    const hash = getTelegramHash();
+    const authDate = getInitDataField("auth_date");
+    if (!user || !hash || !authDate) return;
+
+    const payload = {
+      level_key: levelKey,
+      steps,
+      time_ms: timeMs,
+      name: name || t("leaderboard.player"),
+      telegram: {
+        id: String(user.id ?? ""),
+        first_name: String(user.first_name ?? ""),
+        last_name: String(user.last_name ?? ""),
+        username: String(user.username ?? ""),
+        photo_url: String(user.photo_url ?? ""),
+        auth_date: String(authDate ?? ""),
+        hash: String(hash ?? ""),
+      },
+    };
+
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    // Provide raw initData header as an extra signal for server-side verification when applicable
+    const initData = getTelegramInitData();
+    if (initData)
+      (headers as Record<string, string>)["X-Telegram-Init-Data"] = initData;
+
+    await fetch(EDGE_LEADERBOARD_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      // CORS by default; no credentials needed
+    });
+  } catch {
+    // Silently ignore remote errors; local leaderboard still works
+  }
+}
+
 // Добавляет результат и возвращает ТОП-10 по времени (возр.), шаги — тай-брейк
 export function addResult(
   levelKey: string,
@@ -72,5 +128,12 @@ export function addResult(
   saveLeaderboard(levelKey, top10);
   // Отметим уровень как пройденный в хранилище уровней
   markLevelCompleted(levelKey);
+  // Параллельно отправим результат в Edge Function (если доступен Telegram-контекст)
+  void postRemoteResult(
+    levelKey,
+    timeMs,
+    steps,
+    name || t("leaderboard.player")
+  );
   return top10;
 }

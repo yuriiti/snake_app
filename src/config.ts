@@ -1,0 +1,6 @@
+// Public config for remote integrations
+// You can override via Vite env: VITE_EDGE_LEADERBOARD_URL
+export const EDGE_LEADERBOARD_URL: string =
+  (import.meta as any)?.env?.VITE_EDGE_LEADERBOARD_URL ||
+  "https://ptmvedynqdqmvxsdmbxa.supabase.co/functions/v1/telegram-leaderboard";
+
