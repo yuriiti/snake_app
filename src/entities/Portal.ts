@@ -10,6 +10,8 @@ export class Portal extends GridEntity {
   private sprite?: Phaser.GameObjects.Image;
   private apples?: Apples;
   private pos?: Cell;
+  private keyInactive!: string;
+  private keyActive!: string;
 
   constructor(
     scene: Phaser.Scene,
@@ -20,6 +22,8 @@ export class Portal extends GridEntity {
   ) {
     super(scene, tile, pad, parent);
     this.pos = pos;
+    // Подготовим текстуры, привязанные к текущему размеру
+    this.ensureTextures();
     if (this.pos) this.spawn();
   }
 
@@ -31,16 +35,16 @@ export class Portal extends GridEntity {
 
   setActive(active: boolean) {
     if (!this.sprite) return;
-    this.sprite.setTexture(
-      active ? TEXTURE_KEYS.portalActive : TEXTURE_KEYS.portalInactive
-    );
+    this.sprite.setTexture(active ? this.keyActive : this.keyInactive);
     // Убраны свечение и твины — только смена текстуры
   }
 
   private ensureTextures() {
     const size = this.tile - this.pad * 2;
-    ensureSquareTexture(this.scene, TEXTURE_KEYS.portalInactive, size, COLORS.portal.inactive);
-    ensureSquareTexture(this.scene, TEXTURE_KEYS.portalActive, size, COLORS.portal.active);
+    this.keyInactive = `${TEXTURE_KEYS.portalInactive}_${size}`;
+    this.keyActive = `${TEXTURE_KEYS.portalActive}_${size}`;
+    ensureSquareTexture(this.scene, this.keyInactive, size, COLORS.portal.inactive);
+    ensureSquareTexture(this.scene, this.keyActive, size, COLORS.portal.active);
   }
 
   private spawn() {
@@ -48,7 +52,11 @@ export class Portal extends GridEntity {
     this.ensureTextures();
     const cx = this.pos.x * this.tile + this.tile / 2;
     const cy = this.pos.y * this.tile + this.tile / 2;
-    const spr = this.scene.add.image(cx, cy, this.isActive() ? TEXTURE_KEYS.portalActive : TEXTURE_KEYS.portalInactive);
+    const spr = this.scene.add.image(
+      cx,
+      cy,
+      this.isActive() ? this.keyActive : this.keyInactive
+    );
     spr.setOrigin(0.5, 0.5);
     this.layer.add(spr);
     this.sprite = spr;

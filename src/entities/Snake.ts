@@ -57,6 +57,8 @@ export class Snake {
   // When true, next step is skipped with a small bounce animation
   private skipNextStepWithBounce = false;
   private won = false;
+  private snakeHeadKey!: string;
+  private snakeBodyKey!: string;
 
   constructor(scene: Phaser.Scene, cfg: SnakeConfig) {
     this.scene = scene;
@@ -74,7 +76,7 @@ export class Snake {
     this.snakeLayer = scene.add.container(0, 0);
     this.container.add(this.snakeLayer);
 
-    // Ensure snake textures are available
+    // Ensure snake textures are available (size-specific keys)
     this.ensureSnakeTextures();
     this.initSnakeFromParsed(parsed);
     this.bindInput();
@@ -409,17 +411,16 @@ export class Snake {
 
   // --- Local snake textures: simple colored squares ---
   private ensureSnakeTextures() {
-    const keyHead = TEXTURE_KEYS.snakeHead;
-    const keyBody = TEXTURE_KEYS.snakeBody;
     const s = this.texSize();
-    ensureSquareTexture(this.scene, keyHead, s, COLORS.snake.head);
-    ensureSquareTexture(this.scene, keyBody, s, COLORS.snake.body);
+    this.snakeHeadKey = `${TEXTURE_KEYS.snakeHead}_${s}`;
+    this.snakeBodyKey = `${TEXTURE_KEYS.snakeBody}_${s}`;
+    ensureSquareTexture(this.scene, this.snakeHeadKey, s, COLORS.snake.head);
+    ensureSquareTexture(this.scene, this.snakeBodyKey, s, COLORS.snake.body);
   }
 
   // Выбор ключа текстуры по индексу сегмента
   private texKeyForIndex(i: number): string {
-    if (i === 0) return TEXTURE_KEYS.snakeHead;
-    return TEXTURE_KEYS.snakeBody;
+    return i === 0 ? this.snakeHeadKey : this.snakeBodyKey;
   }
 
   // dirDelta inlined by DIR_DELTAS

@@ -12,6 +12,7 @@ export class Apple {
 
 export class Apples extends GridEntity {
   private map: Map<string, Apple> = new Map();
+  private textureKey: string;
 
   constructor(
     scene: Phaser.Scene,
@@ -21,7 +22,7 @@ export class Apples extends GridEntity {
     parent?: Phaser.GameObjects.Container
   ) {
     super(scene, tile, pad, parent);
-    this.ensureTexture();
+    this.textureKey = this.ensureTexture();
     for (const p of positions) this.addApple(p.x, p.y);
   }
 
@@ -39,12 +40,12 @@ export class Apples extends GridEntity {
   }
 
   hasAt(x: number, y: number) {
-    return this.map.has(`${x},${y}`);
+    return this.map.has(this.posKey(x, y));
   }
 
   // Съесть яблоко в клетке (при наличии), вернуть успех
   eatAt(x: number, y: number): boolean {
-    const key = `${x},${y}`;
+    const key = this.posKey(x, y);
     const a = this.map.get(key);
     if (!a) return false;
     a.sprite?.destroy();
@@ -55,11 +56,11 @@ export class Apples extends GridEntity {
   }
 
   private addApple(x: number, y: number) {
-    const key = `${x},${y}`;
+    const key = this.posKey(x, y);
     const img = this.scene.add.image(
       x * this.tile + this.pad,
       y * this.tile + this.pad,
-      TEXTURE_KEYS.apple
+      this.textureKey
     );
     img.setOrigin(0, 0);
     this.layer.add(img);
@@ -69,10 +70,22 @@ export class Apples extends GridEntity {
     this.map.set(key, a);
   }
 
-  private ensureTexture() {
-    const key = TEXTURE_KEYS.apple;
-    if (this.scene.textures.exists(key)) return;
+  private ensureTexture(): string {
+    // Привязываем размер к ключу, чтобы избежать переиспользования чужой текстуры
     const s = this.tile - this.pad * 2;
+    const key = `${TEXTURE_KEYS.apple}_${s}`;
     ensureSquareTexture(this.scene, key, s, COLORS.apple, RADIUS);
+    return key;
+  }
+
+  private posKey(x: number, y: number) {
+    return `${x},${y}`;
+  }
+
+  destroy() {
+    // Явная очистка ресурсов
+    for (const a of this.map.values()) a.sprite?.destroy();
+    this.map.clear();
+    this.layer.destroy(true);
   }
 }
