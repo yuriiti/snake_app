@@ -3,6 +3,7 @@
 
 import { t } from "../i18n";
 import { preferNameFromTelegram } from "../telegram";
+import { markLevelCompleted } from "../levels/store";
 
 export type ScoreEntry = {
   name: string;
@@ -69,5 +70,7 @@ export function addResult(
   cur.sort((a, b) => a.timeMs - b.timeMs || a.steps - b.steps || a.ts - b.ts);
   const top10 = cur.slice(0, 10);
   saveLeaderboard(levelKey, top10);
+  // Отметим уровень как пройденный в хранилище уровней
+  markLevelCompleted(levelKey);
   return top10;
 }

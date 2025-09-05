@@ -1,6 +1,5 @@
 import Phaser from "phaser";
-import { getLevels, selectLevel } from "../levels/store";
-import { getLeaderboard } from "../game/leaderboard";
+import { getLevels, selectLevel, isLevelCompleted } from "../levels/store";
 import { COLORS, RADIUS } from "../constants";
 import { ensureSquareTexture } from "../utils/graphics";
 import { t, cycleLang } from "../i18n";
@@ -65,7 +64,7 @@ export default class LevelSelectScene extends Phaser.Scene {
 
     // Создаём контейнеры-клетки
     this.cells = levels.map((lvl, i) => {
-      const completed = (getLeaderboard(lvl.key) || []).length > 0;
+      const completed = isLevelCompleted(lvl.key);
       const texBase = completed ? "level_cell_done" : "level_cell";
       const texHover = completed ? "level_cell_done_hover" : "level_cell_hover";
       const container = this.add.container(0, 0);

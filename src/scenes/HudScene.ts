@@ -163,7 +163,7 @@ export default class HudScene extends Phaser.Scene {
         const rightEdge = this.restartText
           ? this.restartText.x - gapX
           : w - margin;
-        this.backText.setPosition(rightEdge - backW, margin + 3);
+        this.backText.setPosition(rightEdge - backW, margin);
       }
     }
   }

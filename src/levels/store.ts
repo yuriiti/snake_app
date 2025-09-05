@@ -60,3 +60,52 @@ export function selectLevelByKey(key: string): boolean {
   }
   return false
 }
+
+// ---------------- Completed levels tracking in localStorage ----------------
+// Храним список ключей уровней через запятую в localStorage по ключу 'levels'
+const COMPLETED_LEVELS_KEY = 'levels'
+
+function getCompletedLevelsRaw(): string {
+  try {
+    return localStorage.getItem(COMPLETED_LEVELS_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+function setCompletedLevelsRaw(value: string): void {
+  try {
+    localStorage.setItem(COMPLETED_LEVELS_KEY, value)
+  } catch {
+    // ignore
+  }
+}
+
+function parseLevels(list: string): string[] {
+  return list
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
+function stringifyLevels(arr: string[]): string {
+  return arr.join(',')
+}
+
+export function isLevelCompleted(levelKey: string): boolean {
+  const raw = getCompletedLevelsRaw()
+  if (!raw) return false
+  const arr = parseLevels(raw)
+  return arr.includes(levelKey)
+}
+
+export function markLevelCompleted(levelKey: string): void {
+  const raw = getCompletedLevelsRaw()
+  // Ensure uniqueness of the list before adding
+  const unique = Array.from(new Set(parseLevels(raw)))
+  if (!unique.includes(levelKey)) {
+    unique.push(levelKey)
+  }
+  // Persist a canonical, de-duplicated list
+  setCompletedLevelsRaw(stringifyLevels(unique))
+}
