@@ -44,8 +44,7 @@ export default class ResultScene extends Phaser.Scene {
     const levels = getLevels();
     const idx = getCurrentLevelIndex();
     this.levelKey = levels[idx]?.key ?? `level_${idx}`;
-    // Добавляем результат (локально отмечаем прохождение и отправляем в Edge Function)
-    addResult(this.levelKey, this.timeMs, this.steps);
+    // Добавим результат и затем загрузим таблицу лидеров (см. submitAndFetchLeaderboard)
     // Переходим к загрузке таблицы лидеров из Supabase
     this.loading = true;
 
@@ -142,8 +141,16 @@ export default class ResultScene extends Phaser.Scene {
       }
     });
     this.layout();
-    // Асинхронно загрузим таблицу лидеров из Supabase и обновим отображение
-    void this.fetchLeaderboard();
+    // Сначала дождёмся сохранения результата, затем загрузим таблицу лидеров
+    void this.submitAndFetchLeaderboard();
+  }
+
+  private async submitAndFetchLeaderboard() {
+    try {
+      await addResult(this.levelKey, this.timeMs, this.steps);
+    } finally {
+      await this.fetchLeaderboard();
+    }
   }
 
   private async fetchLeaderboard() {

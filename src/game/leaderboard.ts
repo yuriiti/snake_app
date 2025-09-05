@@ -56,16 +56,16 @@ async function postRemoteResult(
 }
 
 // Добавляет результат и возвращает ТОП-10 по времени (возр.), шаги — тай-брейк
-export function addResult(
+export async function addResult(
   levelKey: string,
   timeMs: number,
   steps: number,
   name = getPlayerName()
-): void {
+): Promise<void> {
   // Отметим уровень как пройденный в хранилище уровней
   markLevelCompleted(levelKey);
   // Параллельно отправим результат в Edge Function (если доступен Telegram-контекст)
-  void postRemoteResult(
+  await postRemoteResult(
     levelKey,
     timeMs,
     steps,
