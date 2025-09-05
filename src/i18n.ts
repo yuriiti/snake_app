@@ -17,6 +17,7 @@ const messages: Record<Lang, Dict> = {
     'result.headerName': 'Name',
     'result.headerTime': 'Time',
     'result.headerSteps': 'Steps',
+    'result.leaderboardLoading': 'Loading leaderboard…',
     'result.nextLevel': 'Next Level ▶',
     'result.restart': '↻ Restart',
 
@@ -36,6 +37,7 @@ const messages: Record<Lang, Dict> = {
     'result.headerName': 'Имя',
     'result.headerTime': 'Время',
     'result.headerSteps': 'Шаги',
+    'result.leaderboardLoading': 'Загрузка таблицы лидеров…',
     'result.nextLevel': 'След. уровень ▶',
     'result.restart': '↻ Заново',
 
@@ -97,4 +99,3 @@ export function cycleLang(): Lang {
 }
 
 export const availableLangs: Lang[] = ['en', 'ru']
-

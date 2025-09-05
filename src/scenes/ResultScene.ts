@@ -2,12 +2,12 @@ import Phaser from "phaser";
 import { getLevels, getCurrentLevelIndex } from "../levels/store";
 import {
   addResult,
-  getLeaderboard,
   getPlayerName,
   type ScoreEntry,
 } from "../game/leaderboard";
 import { t, onLangChange } from "../i18n";
 import { restartLevel, startLevelIndex } from "../game/restartLevel";
+import { getLeaderboard as getLeaderboardRemote } from "../supabase";
 
 type DataIn = { timeMs: number; steps: number };
 
@@ -26,6 +26,7 @@ export default class ResultScene extends Phaser.Scene {
   private steps = 0;
   private levelKey = "";
   private top: ScoreEntry[] = [];
+  private loading = false;
 
   constructor() {
     super({ key: "ResultScene", active: false });
@@ -43,7 +44,10 @@ export default class ResultScene extends Phaser.Scene {
     const levels = getLevels();
     const idx = getCurrentLevelIndex();
     this.levelKey = levels[idx]?.key ?? `level_${idx}`;
-    this.top = addResult(this.levelKey, this.timeMs, this.steps);
+    // Добавляем результат (локально отмечаем прохождение и отправляем в Edge Function)
+    addResult(this.levelKey, this.timeMs, this.steps);
+    // Переходим к загрузке таблицы лидеров из Supabase
+    this.loading = true;
 
     // Полупрозрачный оверлей
     const { width, height } = this.scale;
@@ -138,6 +142,29 @@ export default class ResultScene extends Phaser.Scene {
       }
     });
     this.layout();
+    // Асинхронно загрузим таблицу лидеров из Supabase и обновим отображение
+    void this.fetchLeaderboard();
+  }
+
+  private async fetchLeaderboard() {
+    try {
+      const rows = await getLeaderboardRemote(this.levelKey);
+      const mapped: ScoreEntry[] = (rows || []).map((r) => ({
+        name: (r?.user_name || t("leaderboard.player")).trim(),
+        timeMs: Math.max(0, Number(r?.time_ms || 0)),
+        steps: Math.max(0, Number(r?.steps || 0)),
+        ts: 0,
+      }));
+      // Сортируем по времени (возр.), затем по шагам (возр.)
+      mapped.sort((a, b) => a.timeMs - b.timeMs || a.steps - b.steps);
+      this.top = mapped.slice(0, 10);
+    } catch {
+      this.top = [];
+    } finally {
+      this.loading = false;
+      this.leaderboardText?.setText(this.leaderboardString());
+      this.layout();
+    }
   }
 
   private formatTime(ms: number): string {
@@ -162,7 +189,13 @@ export default class ResultScene extends Phaser.Scene {
       "result.headerNo"
     )}   ${nameHeader}  ${timeHeader}  ${t("result.headerSteps")}\n`;
     const rows: string[] = [];
-    const list = this.top.length ? this.top : getLeaderboard(this.levelKey);
+
+    if (this.loading) {
+      rows.push(t("result.leaderboardLoading"));
+      return header + rows.join("\n");
+    }
+
+    const list = this.top;
     for (let i = 0; i < 10; i++) {
       const e = list[i];
       if (e) {
