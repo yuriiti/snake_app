@@ -22,7 +22,7 @@ const App: React.FC = () => {
         type: Phaser.AUTO,
         parent: containerRef.current!,
         backgroundColor: `#${COLORS.background.toString(16).padStart(6, "0")}`,
-        fps: { target: 30, forceSetTimeOut: true },
+        fps: { target: 60, forceSetTimeOut: true },
         disableContextMenu: true,
         canvasStyle:
           "touch-action: none; -ms-touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: rgba(0,0,0,0); -webkit-touch-callout: none; outline: none;",
@@ -37,11 +37,7 @@ const App: React.FC = () => {
           },
         },
         // LevelSelect starts first, others launch after selection
-        scene: [
-          LevelSelectScene,
-          GameScene,
-          ResultScene,
-        ],
+        scene: [LevelSelectScene, GameScene, ResultScene],
         pixelArt: true,
         render: {
           antialias: false,

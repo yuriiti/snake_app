@@ -36,7 +36,7 @@ export const LAYER_TILES = {
 
 export const PADS = {
   map: 0,
-  apples: 34,
+  apples: 24,
   snake: 12,
   portal: 16,
   block: 4,

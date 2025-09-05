@@ -288,9 +288,24 @@ export class Snake {
     this.scene.time.delayedCall(250, () => restartLevel(this.scene));
   }
 
-  // Короткий прыжок отключён: без анимации
+  // Короткий прыжок: полклетки вверх и обратно, анимируем контейнером
   private animateBounceHalf(): Promise<void> {
-    return Promise.resolve();
+    return new Promise((resolve) => {
+      const dy = -this.tile * 0.5;
+      const startY = this.snakeLayer.y;
+      this.scene.tweens.add({
+        targets: this.snakeLayer,
+        y: startY + dy,
+        duration: Math.max(80, Math.round(this.moveMs * 0.6)),
+        ease: "Sine.easeOut",
+        yoyo: true,
+        onComplete: () => {
+          // Возвращаем точное исходное положение (на случай накопления ошибок)
+          this.snakeLayer.y = startY;
+          resolve();
+        },
+      });
+    });
   }
 
   private buildSnakeSprites() {
@@ -313,35 +328,65 @@ export class Snake {
 
     const oldSprites = this.snakeSprites.slice();
     const prevPos = oldSprites.map((s) => ({ x: s.x, y: s.y }));
-
-    // Move head instantly
     const headTarget = this.cellToSpriteCenter(newSnake[0]);
-    oldSprites[0].setPosition(headTarget.x, headTarget.y);
 
+    // Если растём — добавляем новый сегмент за головой в позицию головы до шага
     if (grew) {
-      // Insert new segment behind head at head's previous position
       const newBody = this.scene.add
-        .image(
-          prevPos[0].x,
-          prevPos[0].y,
-          // новый сегмент станет индексом 1 после головы
-          this.texKeyForIndex(1)
-        )
+        .image(prevPos[0].x, prevPos[0].y, this.texKeyForIndex(1))
         .setOrigin(0.5, 0.5);
       this.snakeLayer.add(newBody);
-      // Rebuild sprites order: [head, newBody, ...oldSprites.slice(1)]
+      // Обновляем порядок спрайтов согласно новым индексам
       this.snakeSprites = [oldSprites[0], newBody, ...oldSprites.slice(1)];
-    } else {
-      // Shift body segments instantly to previous positions
-      for (let i = oldSprites.length - 1; i >= 1; i--) {
-        const target = prevPos[i - 1];
-        oldSprites[i].setPosition(target.x, target.y);
-      }
     }
 
-    // Finalize move immediately
-    this.finishMove(newSnake);
-    return Promise.resolve();
+    // Анимируем плавный переход: голова к новой клетке, каждый сегмент к позиции предшественника
+    return new Promise((resolve) => {
+      const tweens: Phaser.Tweens.Tween[] = [];
+      let done = 0;
+      const total = grew ? this.snakeSprites.length - 1 : this.snakeSprites.length; // новый сегмент не двигаем
+      const onOneComplete = () => {
+        done += 1;
+        if (done >= total) {
+          // По завершении всех твинов — фиксируем модель и углы/текстуры
+          this.finishMove(newSnake);
+          resolve();
+        }
+      };
+
+      // Голова
+      tweens.push(
+        this.scene.tweens.add({
+          targets: this.snakeSprites[0],
+          x: headTarget.x,
+          y: headTarget.y,
+          duration: this.moveMs,
+          ease: "Sine.easeInOut",
+          onComplete: onOneComplete,
+        })
+      );
+
+      // Тело
+      const spritesToMove = grew ? this.snakeSprites.slice(2) : this.snakeSprites.slice(1);
+      const startIndex = grew ? 2 : 1; // индекс в snakeSprites, соответствующий prevPos[1]
+      for (let si = 0; si < spritesToMove.length; si++) {
+        const sprite = spritesToMove[si];
+        const prevIndex = startIndex + si; // индекс до шага
+        const target = prevPos[prevIndex - 1];
+        tweens.push(
+          this.scene.tweens.add({
+            targets: sprite,
+            x: target.x,
+            y: target.y,
+            duration: this.moveMs,
+            ease: "Sine.easeInOut",
+            onComplete: onOneComplete,
+          })
+        );
+      }
+
+      // Хвост двигается как часть массива slice(1) — ничего доп. не требуется
+    });
   }
 
   private finishMove(newSnake: Cell[]) {
@@ -505,10 +550,23 @@ export class Snake {
 
   private animateFallByOne(): Promise<void> {
     if (!this.snakeSprites.length) return Promise.resolve();
-    for (const s of this.snakeSprites) {
-      s.y = s.y + this.tile;
-    }
-    return Promise.resolve();
+    // Оптимизация: один твин на контейнер, затем фиксация абсолютных координат спрайтов
+    return new Promise((resolve) => {
+      const delta = this.tile;
+      const startY = this.snakeLayer.y;
+      this.scene.tweens.add({
+        targets: this.snakeLayer,
+        y: startY + delta,
+        duration: this.fallMs,
+        ease: "Sine.easeIn",
+        onComplete: () => {
+          // Переносим смещение контейнера в локальные координаты спрайтов
+          for (const s of this.snakeSprites) s.y += delta;
+          this.snakeLayer.y = startY; // контейнер возвращаем
+          resolve();
+        },
+      });
+    });
   }
 
   // ---------- Orientation helpers ----------
