@@ -49,7 +49,6 @@ async function postRemoteResult(
       method: "POST",
       headers,
       body: JSON.stringify(payload),
-      // CORS by default; no credentials needed
     });
   } catch {
     // Silently ignore remote errors; local leaderboard still works

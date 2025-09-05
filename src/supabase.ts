@@ -13,7 +13,6 @@ export async function getLeaderboard(
     .from("public_leaderboard")
     .select("*")
     .eq("level_key", levelKey)
-    .order("score")
     .limit(10);
 
   return results.data;
