@@ -1,6 +1,7 @@
 // Ключи текстур, используемые в игре
 export const TEXTURE_KEYS = {
   block: "block",
+  pushBlock: "push_block",
   apple: "apple",
   snakeHead: "snake_head",
   snakeBody: "snake_body",
@@ -11,15 +12,16 @@ export const TEXTURE_KEYS = {
 // Палитра цветов (0xRRGGBB)
 export const COLORS = {
   background: 0x0e0e10,
-  block: 0x6b7280,
+  block: 0x596275,
+  pushBlock: 0xf5cd79,
   apple: 0xe74c3c,
   snake: {
     head: 0x1ddb6c,
     body: 0x1e8247,
   },
   portal: {
-    active: 0xf0d46a,
-    inactive: 0x2c3e50,
+    active: 0x546de5,
+    inactive: 0x778beb,
   },
 } as const;
 

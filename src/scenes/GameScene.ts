@@ -5,6 +5,7 @@ import { Block } from "../entities/Block";
 import { Portal } from "../entities/Portal";
 import { Snake } from "../entities/Snake";
 import { Apples } from "../entities/Apple";
+import { PushBlocks } from "../entities/PushBlock";
 import { listCells } from "../levels/parse";
 import { ensureBlockPadTexture } from "../utils/graphics";
 import { computeGridLayout, layoutGridContainer } from "../utils/layout";
@@ -29,6 +30,7 @@ export default class GameScene extends Phaser.Scene {
   private mapContainer?: Phaser.GameObjects.Container;
   private portal?: Portal;
   private portalLayer?: Phaser.GameObjects.Container;
+  private pushBlocks?: PushBlocks;
   private snake?: Snake;
   private apples?: Apples;
 
@@ -64,6 +66,7 @@ export default class GameScene extends Phaser.Scene {
     // World and entities
     this.createBackgroundAndGrid();
     this.createMapBlocks(parsed);
+    this.createPushBlocks(parsed);
     this.createPortalAndApples(parsed);
     this.createSnake();
 
@@ -117,6 +120,14 @@ export default class GameScene extends Phaser.Scene {
         this.cols,
         this.rows,
         LAYER_TILES.apples
+      );
+    if (this.pushBlocks)
+      layoutGridContainer(
+        this,
+        this.pushBlocks.getLayer(),
+        this.cols,
+        this.rows,
+        LAYER_TILES.map
       );
     if (this.portalLayer)
       layoutGridContainer(
@@ -242,6 +253,17 @@ export default class GameScene extends Phaser.Scene {
     this.events.on("applesLeft", this.onApplesLeft);
   }
 
+  private createPushBlocks(parsed: ReturnType<typeof getLevel>) {
+    this.pushBlocks = new PushBlocks(
+      this,
+      parsed.rows,
+      parsed.cols,
+      listCells(parsed.pushBlocks),
+      LAYER_TILES.map,
+      PADS.block
+    );
+  }
+
   private createSnake() {
     this.snake = new Snake(this, {
       map: getLevelMap(),
@@ -249,6 +271,7 @@ export default class GameScene extends Phaser.Scene {
       pad: PADS.snake,
     });
     if (this.apples) this.snake.attachApples(this.apples);
+    if (this.pushBlocks) this.snake.attachPushBlocks(this.pushBlocks);
   }
 
   private createHud() {

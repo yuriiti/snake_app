@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Cell, keyFor, parseLevel, ParsedLevel } from "../levels/parse";
 import { Apples } from "./Apple";
+import { PushBlocks } from "./PushBlock";
 import { ensureSquareTexture } from "../utils/graphics";
 import { TEXTURE_KEYS, COLORS } from "../constants";
 import { restartLevel } from "../game/restartLevel";
@@ -40,6 +41,7 @@ export class Snake {
 
   private walls: Set<string>;
   private applesMgr?: Apples;
+  private pushBlocks?: PushBlocks;
   private portal?: Cell;
 
   private container: Phaser.GameObjects.Container;
@@ -59,6 +61,7 @@ export class Snake {
   private won = false;
   private snakeHeadKey!: string;
   private snakeBodyKey!: string;
+  private pendingPush?: Promise<void>;
 
   constructor(scene: Phaser.Scene, cfg: SnakeConfig) {
     this.scene = scene;
@@ -88,6 +91,10 @@ export class Snake {
 
   attachApples(apples: Apples) {
     this.applesMgr = apples;
+  }
+
+  attachPushBlocks(blocks: PushBlocks) {
+    this.pushBlocks = blocks;
   }
 
   layout(viewWidth: number, viewHeight: number) {
@@ -183,8 +190,6 @@ export class Snake {
     }
     if (this.snake.length === 0) return;
 
-    // 2) Обновляем курс; если запрос противоположен текущему — отменяем шаг
-    if (this.nextDir === OPPOSITE_DIR[this.dir]) return;
     this.dir = this.nextDir;
 
     // 3) Планируем перемещение: вычисляем новую голову и валидируем
@@ -193,7 +198,10 @@ export class Snake {
 
     // 4) Анимация и фиксация модели
     this.isMoving = true;
-    await this.animateMove(plan.newSnake, plan.grew);
+    const moveAnim = this.animateMove(plan.newSnake, plan.grew);
+    const pushAnim = this.pendingPush ?? Promise.resolve();
+    await Promise.all([moveAnim, pushAnim]);
+    this.pendingPush = undefined;
     this.scene.events.emit("snakeStep");
 
     // 5) Победа до гравитации (например, портал под головой)
@@ -202,7 +210,9 @@ export class Snake {
       return;
     }
 
-    // 6) Основная гравитация
+    // 6) Сначала гравитация толкаемых блоков, затем змейки
+    await this.applyPushBlocksGravity();
+    // Основная гравитация змейки
     if (await this.applyGravityOrDie(false)) return;
 
     // 7) Доп. гравитация при повороте (bridge mode)
@@ -222,13 +232,43 @@ export class Snake {
   }
 
   // Подготовка перемещения и валидация следующей клетки
-  private planMove(dir: Dir): { next: Cell; grew: boolean; newSnake: Cell[] } | null {
+  private planMove(
+    dir: Dir
+  ): { next: Cell; grew: boolean; newSnake: Cell[] } | null {
     const head = this.snake[0];
     const { dx, dy } = DIR_DELTAS[dir];
     const next = { x: head.x + dx, y: head.y + dy };
     if (!this.isInsideMap(next)) return null;
     if (this.isWall(next)) return null;
     if (this.isSelfCollision(next)) return null;
+    // Если перед нами толкаемый блок — попробуем толкнуть
+    if (this.pushBlocks && this.pushBlocks.hasAt(next.x, next.y)) {
+      const dest = { x: next.x + dx, y: next.y + dy };
+      // проверка границ и занятости клетки назначения
+      if (!this.isInsideMap(dest)) return null;
+      if (this.isWall(dest)) return null;
+      if (this.applesMgr?.hasAt(dest.x, dest.y)) return null;
+      if (this.pushBlocks.hasAt(dest.x, dest.y)) return null;
+      // Клетка назначения не должна совпадать с новой змейкой (после шага)
+      const grewTmp = this.applesMgr?.hasAt(next.x, next.y) ?? false;
+      const tmpNewSnake: Cell[] = [
+        next,
+        ...this.snake.slice(
+          0,
+          grewTmp ? this.snake.length : this.snake.length - 1
+        ),
+      ];
+      if (tmpNewSnake.some((s) => s.x === dest.x && s.y === dest.y))
+        return null;
+      // Планируем толчок: запустим анимацию параллельно со змейкой
+      this.pendingPush = this.pushBlocks.moveBlock(
+        next.x,
+        next.y,
+        dest.x,
+        dest.y,
+        this.moveMs
+      );
+    }
     const grew = this.applesMgr?.hasAt(next.x, next.y) ?? false;
     const newSnake: Cell[] = [
       next,
@@ -279,6 +319,8 @@ export class Snake {
     const head = this.snake[0];
     if (this.applesMgr?.hasAt(head.x, head.y)) {
       this.applesMgr.eatAt(head.x, head.y);
+      // Гравитация блоков может измениться после исчезновения опоры
+      await this.applyPushBlocksGravity();
       await this.applyGravityOrDie(false);
     }
   }
@@ -347,7 +389,9 @@ export class Snake {
     return new Promise((resolve) => {
       const tweens: Phaser.Tweens.Tween[] = [];
       let done = 0;
-      const total = grew ? this.snakeSprites.length - 1 : this.snakeSprites.length; // новый сегмент не двигаем
+      const total = grew
+        ? this.snakeSprites.length - 1
+        : this.snakeSprites.length; // новый сегмент не двигаем
       const onOneComplete = () => {
         done += 1;
         if (done >= total) {
@@ -370,7 +414,9 @@ export class Snake {
       );
 
       // Тело
-      const spritesToMove = grew ? this.snakeSprites.slice(2) : this.snakeSprites.slice(1);
+      const spritesToMove = grew
+        ? this.snakeSprites.slice(2)
+        : this.snakeSprites.slice(1);
       const startIndex = grew ? 2 : 1; // индекс в snakeSprites, соответствующий prevPos[1]
       for (let si = 0; si < spritesToMove.length; si++) {
         const sprite = spritesToMove[si];
@@ -473,7 +519,15 @@ export class Snake {
         if (y >= 0 && y < H && x >= 0 && x < W) grid[y][x] = true;
       }
     }
-    // push blocks could be added here later
+    // push blocks act as support you can walk on
+    if (this.pushBlocks) {
+      for (const k of this.pushBlocks.positionsSet()) {
+        const [cx, cy] = k.split(",");
+        const x = Number(cx),
+          y = Number(cy);
+        if (y >= 0 && y < H && x >= 0 && x < W) grid[y][x] = true;
+      }
+    }
     return grid;
   }
 
@@ -533,6 +587,24 @@ export class Snake {
       await this.animateFallByOne();
     }
     return { changed, out: false };
+  }
+
+  private async applyPushBlocksGravity() {
+    if (!this.pushBlocks) return;
+    // solidsBelow: true если в клетке (x, y+1) есть опора (стены, яблоки, блоки, змейка)
+    const solidsBelow = (x: number, y: number) => {
+      const ny = y + 1;
+      if (ny >= this.rows || ny < 0) return false;
+      if (this.walls.has(keyFor(x, ny))) return true;
+      if (this.applesMgr?.hasAt(x, ny)) return true;
+      if (this.pushBlocks?.hasAt(x, ny)) return true;
+      // Змейка как опора
+      for (const seg of this.snake)
+        if (seg.x === x && seg.y === ny) return true;
+      return false;
+    };
+    const isInside = (x: number, y: number) => this.isInsideMap({ x, y });
+    await this.pushBlocks.applyGravity(solidsBelow, isInside);
   }
 
   private animateFallByOne(): Promise<void> {
