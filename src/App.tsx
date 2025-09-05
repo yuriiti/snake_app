@@ -1,13 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import BackgroundScene from "./scenes/BackgroundScene";
-import MapScene from "./scenes/MapScene";
-import PortalScene from "./scenes/PortalScene";
-import SnakeScene from "./scenes/SnakeScene";
-import AppleScene from "./scenes/AppleScene";
-import HudScene from "./scenes/HudScene";
 import LevelSelectScene from "./scenes/LevelSelectScene";
 import ResultScene from "./scenes/ResultScene";
+import GameScene from "./scenes/GameScene";
 import { COLORS } from "./constants";
 import { onLangChange } from "./i18n";
 
@@ -41,16 +36,10 @@ const App: React.FC = () => {
             preventDefaultWheel: true,
           },
         },
-        // Order matters: HUD and Result last to be on top
         // LevelSelect starts first, others launch after selection
         scene: [
           LevelSelectScene,
-          BackgroundScene,
-          MapScene,
-          PortalScene,
-          AppleScene,
-          SnakeScene,
-          HudScene,
+          GameScene,
           ResultScene,
         ],
         pixelArt: true,

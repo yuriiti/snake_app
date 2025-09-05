@@ -211,14 +211,7 @@ export default class LevelSelectScene extends Phaser.Scene {
     selectLevel(index);
 
     // Запускаем игровые сцены в корректном порядке слоёв
-    const scenes = [
-      "BackgroundScene",
-      "MapScene",
-      "AppleScene",
-      "PortalScene",
-      "SnakeScene",
-      "HudScene",
-    ];
+    const scenes = ["GameScene"];
     for (const key of scenes) {
       if (!this.scene.isActive(key)) this.scene.launch(key);
     }

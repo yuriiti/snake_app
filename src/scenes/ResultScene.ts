@@ -304,14 +304,7 @@ export default class ResultScene extends Phaser.Scene {
       if (!this.scene.isActive("LevelSelectScene"))
         this.scene.launch("LevelSelectScene");
       // Остановим игровые сцены
-      const toStop = [
-        "SnakeScene",
-        "PortalScene",
-        "AppleScene",
-        "MapScene",
-        "BackgroundScene",
-        "HudScene",
-      ];
+      const toStop = ["GameScene"];
       for (const key of toStop) this.scene.stop(key);
       return;
     }

@@ -9,8 +9,8 @@ export function restartLevel(scene: Phaser.Scene) {
   // Сброс HUD статистики (таймер, шаги)
   resetHudStats()
 
-  // Перезапуск основных игровых сцен, порядок слоёв сохраняется
-  const keys = ['AppleScene', 'PortalScene', 'SnakeScene']
+  // Перезапуск игровых сцен
+  const keys = ['GameScene']
   for (const key of keys) {
     const sc = scene.scene.get(key)
     sc?.scene.restart()
@@ -25,7 +25,7 @@ export function startLevelIndex(scene: Phaser.Scene, index: number) {
   selectLevel(index)
   resetLevelCache()
   resetHudStats()
-  const keys = ['BackgroundScene', 'MapScene', 'AppleScene', 'PortalScene', 'SnakeScene', 'HudScene']
+  const keys = ['GameScene']
   for (const key of keys) {
     const sc = scene.scene.get(key)
     if (sc) sc.scene.restart()
@@ -40,7 +40,7 @@ export function startNextLevel(scene: Phaser.Scene) {
   if (idx >= levels.length) {
     // Возвращаемся к выбору уровней
     if (!scene.scene.isActive('LevelSelectScene')) scene.scene.launch('LevelSelectScene')
-    const toStop = ['SnakeScene', 'PortalScene', 'AppleScene', 'MapScene', 'BackgroundScene', 'HudScene']
+    const toStop = ['GameScene']
     for (const key of toStop) scene.scene.stop(key)
     return
   }
