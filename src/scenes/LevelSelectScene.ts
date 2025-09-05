@@ -7,6 +7,7 @@ import { t, cycleLang } from "../i18n";
 
 // Генерируем текстуры для кнопок уровней
 const BASE_SIZE = 72;
+const MARGIN_TOP = 60;
 
 // Начальная сцена выбора карты
 export default class LevelSelectScene extends Phaser.Scene {
@@ -134,12 +135,11 @@ export default class LevelSelectScene extends Phaser.Scene {
 
     // Жёсткие отступы и размеры
     const marginX = 24; // слева/справа
-    const marginTop = 60; // сверху
     const gap = 16; // расстояние между кнопками
 
     // Доступная область под сетку
     const availWidth = Math.max(1, width - marginX * 2);
-    const viewHeight = Math.max(1, height - marginTop);
+    const viewHeight = Math.max(1, height - MARGIN_TOP);
 
     // Количество колонок при максимальном размере кнопки
     let columns = Math.max(
@@ -164,7 +164,7 @@ export default class LevelSelectScene extends Phaser.Scene {
     this.scrollY = Phaser.Math.Clamp(this.scrollY, 0, this.maxScrollY);
     this.grid
       .setScale(1)
-      .setPosition(marginX, marginTop - Math.round(this.scrollY));
+      .setPosition(marginX, MARGIN_TOP - Math.round(this.scrollY));
 
     // Размер и позиция переключателя языка
     if (this.langText) {
@@ -204,7 +204,7 @@ export default class LevelSelectScene extends Phaser.Scene {
 
   private setScroll(y: number) {
     this.scrollY = Phaser.Math.Clamp(y, 0, this.maxScrollY);
-    if (this.grid) this.grid.y = 40 - Math.round(this.scrollY); // 40 = marginTop
+    if (this.grid) this.grid.y = MARGIN_TOP - Math.round(this.scrollY);
   }
 
   private startGame(index: number) {
