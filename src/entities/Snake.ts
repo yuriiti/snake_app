@@ -122,6 +122,27 @@ export class Snake {
     });
   }
 
+  // Публичный метод для мобильного/мышиного ввода: один шаг в заданном направлении
+  // Использует ту же логику ограничений, что и клавиши-стрелки
+  inputDirection(dir: "up" | "down" | "left" | "right") {
+    if (this.won) return;
+    if (this.isMoving) return;
+    if (dir === "up") {
+      if (this.allInOneColumn()) {
+        this.skipNextStepWithBounce = true;
+      } else {
+        this.nextDir = "up";
+      }
+    } else if (dir === "down") {
+      this.nextDir = "down";
+    } else if (dir === "left") {
+      this.nextDir = "left";
+    } else if (dir === "right") {
+      this.nextDir = "right";
+    }
+    this.step();
+  }
+
   private onKeyDown(ev: KeyboardEvent) {
     if (ev.repeat) return; // без автоповтора — один шаг на нажатие
     if (this.won) return; // победа — блокируем дальнейшее управление
