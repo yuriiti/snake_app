@@ -4,7 +4,6 @@ import {
   addResult,
   getLeaderboard,
   getPlayerName,
-  setPlayerName,
   type ScoreEntry,
 } from "../game/leaderboard";
 import { t, onLangChange } from "../i18n";
@@ -65,30 +64,16 @@ export default class ResultScene extends Phaser.Scene {
       .setStroke("#000", 4);
     this.panel.add(this.titleText);
 
-    // Имя игрока (кликабельно для изменения)
+    // Имя игрока (только для отображения, без изменения)
     this.nameText = this.add
       .text(
         0,
         0,
-        `${t("result.nameLabel")}: ${getPlayerName()}  ${t(
-          "result.changeName"
-        )}`
+        `${t("result.nameLabel")}: ${getPlayerName()}`
       )
       .setFontFamily("monospace")
       .setColor("#dddddd")
-      .setStroke("#000", 3)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerover", () => this.nameText?.setAlpha(0.9))
-      .on("pointerout", () => this.nameText?.setAlpha(1))
-      .on("pointerup", () => {
-        const cur = getPlayerName();
-        const name = window.prompt(t("result.promptName"), cur) ?? cur;
-        setPlayerName(name);
-        // Перезапишем последнюю запись с новым именем
-        this.top = getLeaderboard(this.levelKey).map((e, i) => ({ ...e }));
-        // На будущее новые записи будут с новым именем
-        this.refreshTexts();
-      });
+      .setStroke("#000", 3);
     this.panel.add(this.nameText);
 
     // Статистика: время и шаги
@@ -198,9 +183,7 @@ export default class ResultScene extends Phaser.Scene {
 
   private refreshTexts() {
     this.titleText?.setText(t("result.title"));
-    this.nameText?.setText(
-      `${t("result.nameLabel")}: ${getPlayerName()}  ${t("result.changeName")}`
-    );
+    this.nameText?.setText(`${t("result.nameLabel")}: ${getPlayerName()}`);
     this.statsText?.setText(this.statsString());
     this.leaderboardText?.setText(this.leaderboardString());
     this.btnNext?.setText(t("result.nextLevel"));
