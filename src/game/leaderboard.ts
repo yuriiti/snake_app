@@ -77,6 +77,7 @@ async function postRemoteResult(
 
     const headers: HeadersInit = {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
     };
 
     await fetch(EDGE_LEADERBOARD_URL, {
