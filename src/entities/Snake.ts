@@ -199,16 +199,8 @@ export class Snake {
       return;
     const nextKey = keyFor(next.x, next.y);
     if (this.walls.has(nextKey)) return;
-    // запрет столкновения с телом (кроме хвоста при движении без роста)
-    if (
-      this.snake.some(
-        (s, i) =>
-          i !== this.snake.length - 1 &&
-          i !== 0 &&
-          s.x === next.x &&
-          s.y === next.y
-      )
-    )
+    // запрет столкновения с телом (включая хвост)
+    if (this.snake.some((s, i) => i !== 0 && s.x === next.x && s.y === next.y))
       return;
 
     const targetHasApple = this.applesMgr?.hasAt(next.x, next.y) ?? false;
