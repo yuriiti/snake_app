@@ -26,6 +26,11 @@ export default class SnakeScene extends Phaser.Scene {
     this.scale.on("resize", this.layout, this);
     // зонирование по краям экрана для мобильного управления
     this.setupEdgeControls();
+    // Чистим обработчики и зону при перезапуске сцены
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off("resize", this.layout, this);
+      this.teardownEdgeControls();
+    });
   }
 
   private layout() {
@@ -56,6 +61,18 @@ export default class SnakeScene extends Phaser.Scene {
     if (!this.inputZone) return;
     this.inputZone.setPosition(0, 0);
     this.inputZone.setSize(viewW, viewH);
+  }
+
+  // Удаляем зону и сбрасываем ссылку (для корректного рестарта)
+  private teardownEdgeControls() {
+    if (!this.inputZone) return;
+    try {
+      this.inputZone.disableInteractive();
+    } catch {}
+    try {
+      this.inputZone.destroy(true);
+    } catch {}
+    this.inputZone = undefined;
   }
 
   // Выбор направления по доминирующей оси относительно центра экрана
