@@ -37,7 +37,7 @@ export default class GameScene extends Phaser.Scene {
   private stepsText?: Phaser.GameObjects.Text;
   private restartText?: Phaser.GameObjects.Text;
   private backText?: Phaser.GameObjects.Text;
-  private lastTimeUpdate = 0;
+  private timeEvent?: Phaser.Time.TimerEvent;
   private btnUp?: Phaser.GameObjects.Container;
   private btnDown?: Phaser.GameObjects.Container;
   private btnLeft?: Phaser.GameObjects.Container;
@@ -45,6 +45,8 @@ export default class GameScene extends Phaser.Scene {
 
   // Subscriptions
   private onApplesLeft?: (left: number) => void;
+  private onSnakeStep?: () => void;
+  private onLevelWin?: () => void;
 
   constructor() {
     super({ key: "GameScene", active: false });
@@ -56,145 +58,31 @@ export default class GameScene extends Phaser.Scene {
     // Reset HUD stats at level start
     resetHudStats();
 
-    // --- Level data
-    const parsed = getLevel();
-    this.rows = parsed.rows;
-    this.cols = parsed.cols;
+    // Load level and remember grid size
+    const parsed = this.initLevel();
 
-    // --- Background and grid overlay
-    const { width, height } = this.scale;
-    this.bg = this.add
-      .rectangle(width / 2, height / 2, width, height, COLORS.background)
-      .setScrollFactor(0)
-      .setOrigin(0.5, 0.5);
+    // World and entities
+    this.createBackgroundAndGrid();
+    this.createMapBlocks(parsed);
+    this.createPortalAndApples(parsed);
+    this.createSnake();
 
-    const gridKey = `grid_blocks_${GRID.cell}_${GRID.pad}`;
-    ensureBlockPadTexture(
-      this,
-      gridKey,
-      GRID.cell,
-      GRID.color,
-      GRID.alpha,
-      GRID.pad
-    );
-    this.grid = this.add
-      .tileSprite(0, 0, width, height, gridKey)
-      .setOrigin(0, 0)
-      .setScrollFactor(0);
-
-    // --- Map blocks
-    this.mapContainer = this.add.container(0, 0);
-    const blocks = Block.fromWalls(parsed.walls);
-    for (const b of blocks) this.mapContainer.add(b.addTo(this, LAYER_TILES.map));
-
-    // --- Portal
-    this.portal = new Portal(
-      this,
-      parsed.portal,
-      LAYER_TILES.portal,
-      PADS.portal
-    );
-    this.portalLayer = this.portal.getLayer();
-
-    // --- Apples manager (inlined)
-    this.apples = new Apples(
-      this,
-      listCells(parsed.apples),
-      LAYER_TILES.apples,
-      PADS.apples
-    );
-    this.portal.attachApples(this.apples);
-    // Track portal active state via applesLeft updates
-    this.onApplesLeft = (left: number) => this.portal?.setActive(left === 0);
-    this.events.on("applesLeft", this.onApplesLeft);
-
-    // --- Snake
-    this.snake = new Snake(this, {
-      map: getLevelMap(),
-      tile: LAYER_TILES.snake,
-      pad: PADS.snake,
-    });
-    this.snake.attachApples(this.apples);
-
-    // --- HUD: texts
-    this.timeText = this.add.text(12, 10, "00:00").setDepth(1000);
-    this.stepsText = this.add.text(12, 34, "0").setDepth(1000);
-
-    // Restart button (↻)
-    this.restartText = this.add
-      .text(0, 0, "↻")
-      .setDepth(1000)
-      .setInteractive({ useHandCursor: true });
-    this.restartText
-      .on("pointerover", () => this.restartText?.setAlpha(0.9))
-      .on("pointerout", () => this.restartText?.setAlpha(1))
-      .on("pointerdown", () => this.restartText?.setScale(0.95))
-      .on("pointerup", () => {
-        this.restartText?.setScale(1);
-        restartLevel(this);
-      });
-
-    // Back button (≡) to LevelSelect
-    this.backText = this.add
-      .text(0, 0, "≡")
-      .setDepth(1000)
-      .setInteractive({ useHandCursor: true });
-    this.backText
-      .on("pointerover", () => this.backText?.setAlpha(0.9))
-      .on("pointerout", () => this.backText?.setAlpha(1))
-      .on("pointerdown", () => this.backText?.setScale(0.95))
-      .on("pointerup", () => {
-        this.backText?.setScale(1);
-        // Return to level select
-        resetLevelCache();
-        resetHudStats();
-        if (!this.scene.isActive("LevelSelectScene"))
-          this.scene.launch("LevelSelectScene");
-        // Stop gameplay scene
-        for (const key of ["GameScene"]) this.scene.stop(key);
-      });
-
-    // --- HUD: D‑Pad controls
+    // UI
+    this.createHud();
+    this.createTopButtons();
     this.createDpad();
+    this.startTimeUpdater();
 
-    // --- Events from Snake
-    const onStep = () => {
-      incSteps();
-      this.stepsText?.setText(`${getSteps()}`);
-    };
-    const onWin = () => {
-      const timeMs = getElapsedMs();
-      const steps = getSteps();
-      if (!this.scene.isActive("ResultScene"))
-        this.scene.launch("ResultScene", { timeMs, steps });
-    };
-    this.events.on("snakeStep", onStep);
-    this.events.on("levelWin", onWin);
+    // Events and cleanup
+    this.bindGameEvents();
+    this.bindShutdownCleanup();
 
-    // Cleanup subscriptions
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.scale.off("resize", this.layout, this);
-      this.events.off("applesLeft", this.onApplesLeft as any);
-      this.events.off("snakeStep", onStep);
-      this.events.off("levelWin", onWin);
-    });
-
-    // Initial layout and on resize
+    // Layout now and on resize
     this.scale.on("resize", this.layout, this);
     this.layout();
   }
 
-  update(_time: number, _delta: number) {
-    if (!this.timeText) return;
-    const now = this.time.now;
-    if (now - this.lastTimeUpdate < 200) return;
-    this.lastTimeUpdate = now;
-    const elapsed = getElapsedMs();
-    const mm = Math.floor(elapsed / 60000);
-    const ss = Math.floor((elapsed % 60000) / 1000);
-    const pad2 = (n: number) => n.toString().padStart(2, "0");
-    this.timeText.setText(`${pad2(mm)}:${pad2(ss)}`);
-  }
+  update(_time: number, _delta: number) {}
 
   private layout = () => {
     const { width, height } = this.scale;
@@ -296,6 +184,160 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.layoutDpad(margin);
+  }
+
+  private initLevel() {
+    const parsed = getLevel();
+    this.rows = parsed.rows;
+    this.cols = parsed.cols;
+    return parsed;
+  }
+
+  private createBackgroundAndGrid() {
+    const { width, height } = this.scale;
+    this.bg = this.add
+      .rectangle(width / 2, height / 2, width, height, COLORS.background)
+      .setScrollFactor(0)
+      .setOrigin(0.5, 0.5);
+
+    const gridKey = `grid_blocks_${GRID.cell}_${GRID.pad}`;
+    ensureBlockPadTexture(
+      this,
+      gridKey,
+      GRID.cell,
+      GRID.color,
+      GRID.alpha,
+      GRID.pad
+    );
+    this.grid = this.add
+      .tileSprite(0, 0, width, height, gridKey)
+      .setOrigin(0, 0)
+      .setScrollFactor(0);
+  }
+
+  private createMapBlocks(parsed: ReturnType<typeof getLevel>) {
+    this.mapContainer = this.add.container(0, 0);
+    const blocks = Block.fromWalls(parsed.walls);
+    for (const b of blocks) this.mapContainer.add(b.addTo(this, LAYER_TILES.map));
+  }
+
+  private createPortalAndApples(parsed: ReturnType<typeof getLevel>) {
+    this.portal = new Portal(
+      this,
+      parsed.portal,
+      LAYER_TILES.portal,
+      PADS.portal
+    );
+    this.portalLayer = this.portal.getLayer();
+
+    this.apples = new Apples(
+      this,
+      listCells(parsed.apples),
+      LAYER_TILES.apples,
+      PADS.apples
+    );
+    this.portal.attachApples(this.apples);
+    // Track portal active state via applesLeft updates
+    this.onApplesLeft = (left: number) => this.portal?.setActive(left === 0);
+    this.events.on("applesLeft", this.onApplesLeft);
+  }
+
+  private createSnake() {
+    this.snake = new Snake(this, {
+      map: getLevelMap(),
+      tile: LAYER_TILES.snake,
+      pad: PADS.snake,
+    });
+    if (this.apples) this.snake.attachApples(this.apples);
+  }
+
+  private createHud() {
+    this.timeText = this.add.text(12, 10, "00:00").setDepth(1000);
+    this.stepsText = this.add.text(12, 34, "0").setDepth(1000);
+  }
+
+  private createTopButtons() {
+    // Restart (↻)
+    this.restartText = this.makeIconButton("↻", () => restartLevel(this));
+    // Back (≡)
+    this.backText = this.makeIconButton("≡", () => {
+      // Return to level select
+      resetLevelCache();
+      resetHudStats();
+      if (!this.scene.isActive("LevelSelectScene"))
+        this.scene.launch("LevelSelectScene");
+      // Stop gameplay scene
+      for (const key of ["GameScene"]) this.scene.stop(key);
+    });
+  }
+
+  private makeIconButton(
+    label: string,
+    onClick: () => void
+  ): Phaser.GameObjects.Text {
+    const t = this.add
+      .text(0, 0, label)
+      .setDepth(1000)
+      .setInteractive({ useHandCursor: true });
+    t.on("pointerover", () => t.setAlpha(0.9))
+      .on("pointerout", () => t.setAlpha(1))
+      .on("pointerdown", () => t.setScale(0.95))
+      .on("pointerup", () => {
+        t.setScale(1);
+        onClick();
+      });
+    return t;
+  }
+
+  private startTimeUpdater() {
+    // Update the time label every 200ms using Phaser timer
+    this.timeEvent?.destroy();
+    this.timeEvent = this.time.addEvent({
+      delay: 200,
+      loop: true,
+      callback: () => this.updateTimeText(),
+    });
+  }
+
+  private updateTimeText() {
+    if (!this.timeText) return;
+    const elapsed = getElapsedMs();
+    const mm = Math.floor(elapsed / 60000);
+    const ss = Math.floor((elapsed % 60000) / 1000);
+    const pad2 = (n: number) => n.toString().padStart(2, "0");
+    this.timeText.setText(`${pad2(mm)}:${pad2(ss)}`);
+  }
+
+  private bindGameEvents() {
+    this.onSnakeStep = () => {
+      incSteps();
+      this.stepsText?.setText(`${getSteps()}`);
+    };
+    this.onLevelWin = () => {
+      const timeMs = getElapsedMs();
+      const steps = getSteps();
+      if (!this.scene.isActive("ResultScene"))
+        this.scene.launch("ResultScene", { timeMs, steps });
+    };
+    this.events.on("snakeStep", this.onSnakeStep);
+    this.events.on("levelWin", this.onLevelWin);
+  }
+
+  private bindShutdownCleanup() {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off("resize", this.layout, this);
+      if (this.onApplesLeft)
+        this.events.off("applesLeft", this.onApplesLeft as any);
+      if (this.onSnakeStep)
+        this.events.off("snakeStep", this.onSnakeStep as any);
+      if (this.onLevelWin) this.events.off("levelWin", this.onLevelWin as any);
+      if (this.timeEvent) {
+        try {
+          this.timeEvent.destroy();
+        } catch {}
+        this.timeEvent = undefined;
+      }
+    });
   }
 
   private makeDirButton(
