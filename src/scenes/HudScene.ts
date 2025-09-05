@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import SnakeScene from "./SnakeScene";
 import { restartLevel } from "../game/restartLevel";
 import { resetLevelCache } from "../levels/store";
 import {
@@ -14,6 +15,11 @@ export default class HudScene extends Phaser.Scene {
   private stepsText?: Phaser.GameObjects.Text;
   private restartText?: Phaser.GameObjects.Text;
   private backText?: Phaser.GameObjects.Text;
+  // D-pad controls
+  private btnUp?: Phaser.GameObjects.Container;
+  private btnDown?: Phaser.GameObjects.Container;
+  private btnLeft?: Phaser.GameObjects.Container;
+  private btnRight?: Phaser.GameObjects.Container;
 
   constructor() {
     super({ key: "HudScene", active: false });
@@ -92,6 +98,9 @@ export default class HudScene extends Phaser.Scene {
       snakeScene?.events.off("levelWin", onWin);
     });
 
+    // D-Pad кнопки управления внизу экрана
+    this.createDpad();
+
     // Обновление расположения при ресайзе
     this.scale.on("resize", this.layout, this);
     this.layout();
@@ -166,5 +175,91 @@ export default class HudScene extends Phaser.Scene {
         this.backText.setPosition(rightEdge - backW, margin);
       }
     }
+
+    // ---- D-Pad layout ----
+    this.layoutDpad(margin, spacing);
+  }
+
+  // Создание одного контейнера-кнопки с фоном и стрелкой
+  private makeDirButton(
+    label: string,
+    onPress: () => void
+  ): Phaser.GameObjects.Container {
+    const container = this.add.container(0, 0).setDepth(1000);
+    container.setScrollFactor(0);
+
+    const bg = this.add
+      .rectangle(0, 0, 10, 10, 0xffffff, 0.08)
+      .setStrokeStyle(2, 0xffffff, 0.2)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    const txt = this.add
+      .text(0, 0, label, {
+        fontFamily: "monospace",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5)
+      .setDepth(1001);
+    txt.setScrollFactor(0);
+    bg.setScrollFactor(0);
+
+    bg.on("pointerdown", () => {
+      container.setScale(0.96);
+      onPress();
+    });
+    bg.on("pointerup", () => container.setScale(1));
+    bg.on("pointerout", () => container.setScale(1));
+
+    container.add([bg, txt]);
+    return container;
+  }
+
+  private createDpad() {
+    const getSnake = () => this.scene.get("SnakeScene") as SnakeScene;
+    this.btnUp = this.makeDirButton("↑", () => getSnake().inputDirection("up"));
+    this.btnDown = this.makeDirButton("↓", () =>
+      getSnake().inputDirection("down")
+    );
+    this.btnLeft = this.makeDirButton("←", () =>
+      getSnake().inputDirection("left")
+    );
+    this.btnRight = this.makeDirButton("→", () =>
+      getSnake().inputDirection("right")
+    );
+  }
+
+  private layoutDpad(margin: number, spacing: number) {
+    if (!this.btnUp || !this.btnDown || !this.btnLeft || !this.btnRight) return;
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    // Размеры кнопок адаптивно к экрану
+    const minSide = Math.min(w, h);
+    const btnSize = Phaser.Math.Clamp(Math.round(minSide * 0.12), 44, 110);
+    const gap = Math.round(btnSize * 0.2);
+    const bottomY = h - margin - btnSize / 2; // центр нижней кнопки
+    const centerX = Math.round(w * 0.5);
+
+    // Обновляем фон и текст в кнопках
+    const tuneButton = (btn: Phaser.GameObjects.Container) => {
+      const [bg, txt] = btn.list as [
+        Phaser.GameObjects.Rectangle,
+        Phaser.GameObjects.Text
+      ];
+      bg.setSize(btnSize, btnSize);
+      txt.setFontSize(Math.round(btnSize * 0.58));
+      txt.setStroke("#000000", Math.max(2, Math.round(btnSize * 0.08)));
+    };
+
+    tuneButton(this.btnUp);
+    tuneButton(this.btnDown);
+    tuneButton(this.btnLeft);
+    tuneButton(this.btnRight);
+
+    // Расставляем крестовину около нижнего края по центру
+    this.btnDown.setPosition(centerX, bottomY);
+    this.btnUp.setPosition(centerX, bottomY - (btnSize + gap));
+    this.btnLeft.setPosition(centerX - (btnSize + gap), bottomY);
+    this.btnRight.setPosition(centerX + (btnSize + gap), bottomY);
   }
 }

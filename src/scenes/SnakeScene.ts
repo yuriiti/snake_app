@@ -7,10 +7,14 @@ import { LAYER_TILES, PADS } from "../constants";
 export default class SnakeScene extends Phaser.Scene {
   private snake?: Snake;
   private readonly tile = LAYER_TILES.snake;
-  private inputZone?: Phaser.GameObjects.Zone;
 
   constructor() {
     super({ key: "SnakeScene", active: false });
+  }
+
+  // Публичный метод: шаг в заданном направлении (для HUD-кнопок)
+  public inputDirection(dir: "up" | "down" | "left" | "right") {
+    this.snake?.inputDirection(dir);
   }
 
   create() {
@@ -24,12 +28,9 @@ export default class SnakeScene extends Phaser.Scene {
     if (apples) this.snake.attachApples(apples);
     this.layout();
     this.scale.on("resize", this.layout, this);
-    // зонирование по краям экрана для мобильного управления
-    this.setupEdgeControls();
     // Чистим обработчики и зону при перезапуске сцены
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off("resize", this.layout, this);
-      this.teardownEdgeControls();
     });
   }
 
@@ -37,53 +38,5 @@ export default class SnakeScene extends Phaser.Scene {
     if (!this.snake) return;
     const { width, height } = this.scale;
     this.snake.layout(width, height);
-    this.layoutEdgeControls(width, height);
-  }
-
-  // Создаём полноэкранную зону; направление определяется по положению тапа
-  private setupEdgeControls() {
-    if (this.inputZone) return;
-    const zone = this.add
-      .zone(0, 0, 10, 10)
-      .setOrigin(0)
-      .setInteractive({ useHandCursor: false })
-      .setScrollFactor(0);
-    zone.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      const dir = this.pickDirFromPointer(p);
-      this.snake?.inputDirection(dir);
-    });
-    this.inputZone = zone;
-    this.layoutEdgeControls(this.scale.width, this.scale.height);
-  }
-
-  // Растягиваем зону на весь экран
-  private layoutEdgeControls(viewW: number, viewH: number) {
-    if (!this.inputZone) return;
-    this.inputZone.setPosition(0, 0);
-    this.inputZone.setSize(viewW, viewH);
-  }
-
-  // Удаляем зону и сбрасываем ссылку (для корректного рестарта)
-  private teardownEdgeControls() {
-    if (!this.inputZone) return;
-    try {
-      this.inputZone.disableInteractive();
-    } catch {}
-    try {
-      this.inputZone.destroy(true);
-    } catch {}
-    this.inputZone = undefined;
-  }
-
-  // Выбор направления по доминирующей оси относительно центра экрана
-  private pickDirFromPointer(p: Phaser.Input.Pointer): "up" | "down" | "left" | "right" {
-    const w = this.scale.width;
-    const h = this.scale.height;
-    const cx = w / 2;
-    const cy = h / 2;
-    const dx = p.x - cx;
-    const dy = p.y - cy;
-    if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? "left" : "right";
-    return dy < 0 ? "up" : "down";
   }
 }
