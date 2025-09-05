@@ -2,13 +2,7 @@
 // Хранится отдельно для каждого уровня по ключу уровня
 
 import { t } from "../i18n";
-import {
-  preferNameFromTelegram,
-  getTelegramUser,
-  getInitDataField,
-  getTelegramHash,
-  getTelegramInitData,
-} from "../telegram";
+import { preferNameFromTelegram, getTelegramInitData } from "../telegram";
 import { EDGE_LEADERBOARD_URL } from "../config";
 import { markLevelCompleted } from "../levels/store";
 
@@ -68,35 +62,22 @@ async function postRemoteResult(
   name: string
 ) {
   try {
-    // Only attempt if we have Telegram context with hash for verification
-    const user = getTelegramUser();
-    const hash = getTelegramHash();
-    const authDate = getInitDataField("auth_date");
-    if (!user || !hash || !authDate) return;
+    // Only attempt if we have Telegram initData for verification
+    const initData = getTelegramInitData();
+
+    if (!initData) return;
 
     const payload = {
       level_key: levelKey,
       steps,
       time_ms: timeMs,
       name: name || t("leaderboard.player"),
-      telegram: {
-        id: String(user.id ?? ""),
-        first_name: String(user.first_name ?? ""),
-        last_name: String(user.last_name ?? ""),
-        username: String(user.username ?? ""),
-        photo_url: String(user.photo_url ?? ""),
-        auth_date: String(authDate ?? ""),
-        hash: String(hash ?? ""),
-      },
+      telegram: initData,
     };
 
     const headers: HeadersInit = {
       "Content-Type": "application/json",
     };
-    // Provide raw initData header as an extra signal for server-side verification when applicable
-    const initData = getTelegramInitData();
-    if (initData)
-      (headers as Record<string, string>)["X-Telegram-Init-Data"] = initData;
 
     await fetch(EDGE_LEADERBOARD_URL, {
       method: "POST",
