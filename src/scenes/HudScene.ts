@@ -235,7 +235,7 @@ export default class HudScene extends Phaser.Scene {
 
     // Размеры кнопок адаптивно к экрану
     const minSide = Math.min(w, h);
-    const btnSize = Phaser.Math.Clamp(Math.round(minSide * 0.18), 44, 110);
+    const btnSize = Phaser.Math.Clamp(Math.round(minSide * 0.14), 44, 110);
     const gap = Math.round(btnSize * 0.2);
     const bottomY = h - 40 - margin - btnSize / 2; // центр нижней кнопки
     const centerX = Math.round(w * 0.5);
