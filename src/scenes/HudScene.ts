@@ -15,6 +15,7 @@ export default class HudScene extends Phaser.Scene {
   private stepsText?: Phaser.GameObjects.Text;
   private restartText?: Phaser.GameObjects.Text;
   private backText?: Phaser.GameObjects.Text;
+  private lastTimeUpdate = 0;
   // D-pad controls
   private btnUp?: Phaser.GameObjects.Container;
   private btnDown?: Phaser.GameObjects.Container;
@@ -106,15 +107,18 @@ export default class HudScene extends Phaser.Scene {
     this.layout();
   }
 
-  update() {
+  update(_time: number, _delta: number) {
     if (!this.timeText) return;
+    // Обновляем время не чаще, чем раз в 200 мс
+    const now = this.time.now;
+    if (now - this.lastTimeUpdate < 200) return;
+    this.lastTimeUpdate = now;
     const elapsed = getElapsedMs();
     const mm = Math.floor(elapsed / 60000);
     const ss = Math.floor((elapsed % 60000) / 1000);
     const pad2 = (n: number) => n.toString().padStart(2, "0");
     this.timeText.setText(`${pad2(mm)}:${pad2(ss)}`);
-    // Держим счётчик шагов синхронизированным (обновится сразу после ресета)
-    this.stepsText?.setText(`${getSteps()}`);
+    // stepsText обновляется событием snakeStep — без лишних перерисовок каждую рамку
   }
 
   private getResponsiveFontSize(): number {
