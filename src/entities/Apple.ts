@@ -7,8 +7,6 @@ import { GridEntity } from "../game/GridEntity";
 // Отдельное яблоко и менеджер коллекции яблок на сетке
 export class Apple {
   sprite?: Phaser.GameObjects.Image;
-  glow?: Phaser.FX.Glow;
-  tween?: Phaser.Tweens.Tween;
   constructor(public x: number, public y: number) {}
 }
 
@@ -49,7 +47,6 @@ export class Apples extends GridEntity {
     const key = `${x},${y}`;
     const a = this.map.get(key);
     if (!a) return false;
-    a.tween?.remove();
     a.sprite?.destroy();
     this.map.delete(key);
     // Уведомим слушателей (например, сцену портала) о количестве
@@ -67,30 +64,8 @@ export class Apples extends GridEntity {
     img.setOrigin(0, 0);
     this.layer.add(img);
 
-    // Эффект свечения и лёгкое "дыхание" через твины
-    const outerMin = 3.5;
-    const outerMax = 5;
-    const duration = 400;
-    const hold = 100;
-    const repeatDelay = 10;
-
-    const glow = img.postFX.addGlow(COLORS.apple, outerMin, 0, false, 1, 20);
-
-    const tween = this.scene.tweens.add({
-      targets: glow,
-      outerStrength: { from: outerMin, to: outerMax },
-      duration,
-      ease: "Sine.InOut",
-      yoyo: true,
-      hold,
-      repeatDelay,
-      repeat: -1,
-    });
-
     const a = new Apple(x, y);
     a.sprite = img;
-    a.glow = glow;
-    a.tween = tween;
     this.map.set(key, a);
   }
 

@@ -10,8 +10,6 @@ export class Portal extends GridEntity {
   private sprite?: Phaser.GameObjects.Image;
   private apples?: Apples;
   private pos?: Cell;
-  private glow?: Phaser.FX.Glow;
-  private tween?: Phaser.Tweens.Tween;
 
   constructor(
     scene: Phaser.Scene,
@@ -36,44 +34,7 @@ export class Portal extends GridEntity {
     this.sprite.setTexture(
       active ? TEXTURE_KEYS.portalActive : TEXTURE_KEYS.portalInactive
     );
-    // При активации добавляем мягкое свечение, как у яблок
-    if (active) {
-      // If already animated, do nothing
-      if (!this.glow) {
-        const outerMin = 3.5;
-        const outerMax = 5;
-        const duration = 400;
-        const hold = 100;
-        const repeatDelay = 10;
-
-        this.glow = this.sprite.postFX.addGlow(
-          COLORS.portal.active,
-          outerMin,
-          0,
-          false,
-          1,
-          20
-        );
-        this.tween = this.scene.tweens.add({
-          targets: this.glow,
-          outerStrength: { from: outerMin, to: outerMax },
-          duration,
-          ease: "Sine.InOut",
-          yoyo: true,
-          hold,
-          repeatDelay,
-          repeat: -1,
-        });
-      }
-    } else {
-      // Деактивация: убираем твин и эффект
-      this.tween?.remove();
-      this.tween = undefined;
-      if (this.glow) {
-        this.sprite.clearFX();
-        this.glow = undefined;
-      }
-    }
+    // Убраны свечение и твины — только смена текстуры
   }
 
   private ensureTextures() {

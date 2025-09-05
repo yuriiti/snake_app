@@ -288,30 +288,9 @@ export class Snake {
     this.scene.time.delayedCall(250, () => restartLevel(this.scene));
   }
 
-  // Короткий прыжок: приподнять всю змейку на пол клетки и вернуть обратно
+  // Короткий прыжок отключён: без анимации
   private animateBounceHalf(): Promise<void> {
-    const half = this.tile * 0.3;
-    const upMs = Math.max(60, Math.floor(this.moveMs * 0.35));
-    const downMs = upMs;
-    const baseY = this.snakeLayer.y;
-    return new Promise<void>((resolve) => {
-      // поднимаем/опускаем весь слой змейки, чтобы не трогать модель
-      this.scene.tweens.add({
-        targets: this.snakeLayer,
-        y: baseY - half,
-        duration: upMs,
-        ease: "Quad.easeOut",
-        onComplete: () => {
-          this.scene.tweens.add({
-            targets: this.snakeLayer,
-            y: baseY,
-            duration: downMs,
-            ease: "Quad.easeIn",
-            onComplete: () => resolve(),
-          });
-        },
-      });
-    });
+    return Promise.resolve();
   }
 
   private buildSnakeSprites() {
@@ -335,60 +314,34 @@ export class Snake {
     const oldSprites = this.snakeSprites.slice();
     const prevPos = oldSprites.map((s) => ({ x: s.x, y: s.y }));
 
-    // Head moves to next
+    // Move head instantly
     const headTarget = this.cellToSpriteCenter(newSnake[0]);
+    oldSprites[0].setPosition(headTarget.x, headTarget.y);
 
-    let pending = 0;
-    return new Promise<void>((resolve) => {
-      const onDone = () => {
-        pending--;
-        if (pending === 0) {
-          this.finishMove(newSnake);
-          resolve();
-        }
-      };
-
-      // Tween head
-      pending++;
-      this.scene.tweens.add({
-        targets: oldSprites[0],
-        x: headTarget.x,
-        y: headTarget.y,
-        duration: this.moveMs,
-        ease: "Quad.easeInOut",
-        onComplete: onDone,
-      });
-
-      if (grew) {
-        // Insert new segment behind head at head's previous position
-        const newBody = this.scene.add
-          .image(
-            prevPos[0].x,
-            prevPos[0].y,
-            // новый сегмент станет индексом 1 после головы
-            this.texKeyForIndex(1)
-          )
-          .setOrigin(0.5, 0.5);
-        this.snakeLayer.add(newBody);
-        // Rebuild sprites order: [head, newBody, ...oldSprites.slice(1)]
-        this.snakeSprites = [oldSprites[0], newBody, ...oldSprites.slice(1)];
-        // Старые сегменты остаются на местах — движения кроме головы нет
-      } else {
-        // Shift body segments to previous segment positions
-        for (let i = oldSprites.length - 1; i >= 1; i--) {
-          const target = prevPos[i - 1];
-          pending++;
-          this.scene.tweens.add({
-            targets: oldSprites[i],
-            x: target.x,
-            y: target.y,
-            duration: this.moveMs,
-            ease: "Quad.easeInOut",
-            onComplete: onDone,
-          });
-        }
+    if (grew) {
+      // Insert new segment behind head at head's previous position
+      const newBody = this.scene.add
+        .image(
+          prevPos[0].x,
+          prevPos[0].y,
+          // новый сегмент станет индексом 1 после головы
+          this.texKeyForIndex(1)
+        )
+        .setOrigin(0.5, 0.5);
+      this.snakeLayer.add(newBody);
+      // Rebuild sprites order: [head, newBody, ...oldSprites.slice(1)]
+      this.snakeSprites = [oldSprites[0], newBody, ...oldSprites.slice(1)];
+    } else {
+      // Shift body segments instantly to previous positions
+      for (let i = oldSprites.length - 1; i >= 1; i--) {
+        const target = prevPos[i - 1];
+        oldSprites[i].setPosition(target.x, target.y);
       }
-    });
+    }
+
+    // Finalize move immediately
+    this.finishMove(newSnake);
+    return Promise.resolve();
   }
 
   private finishMove(newSnake: Cell[]) {
@@ -552,22 +505,10 @@ export class Snake {
 
   private animateFallByOne(): Promise<void> {
     if (!this.snakeSprites.length) return Promise.resolve();
-    let pending = this.snakeSprites.length;
-    return new Promise<void>((resolve) => {
-      const onDone = () => {
-        pending--;
-        if (pending === 0) resolve();
-      };
-      for (const s of this.snakeSprites) {
-        this.scene.tweens.add({
-          targets: s,
-          y: s.y + this.tile,
-          duration: this.fallMs,
-          ease: "Quad.easeIn",
-          onComplete: onDone,
-        });
-      }
-    });
+    for (const s of this.snakeSprites) {
+      s.y = s.y + this.tile;
+    }
+    return Promise.resolve();
   }
 
   // ---------- Orientation helpers ----------
