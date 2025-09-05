@@ -8,6 +8,21 @@ import { stopTimer } from "../game/hudStats";
 
 type Dir = "up" | "down" | "left" | "right";
 
+// Direction utilities kept close to usage for clarity
+const DIR_DELTAS: Record<Dir, { dx: number; dy: number }> = {
+  up: { dx: 0, dy: -1 },
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+  right: { dx: 1, dy: 0 },
+};
+
+const OPPOSITE_DIR: Record<Dir, Dir> = {
+  up: "down",
+  down: "up",
+  left: "right",
+  right: "left",
+};
+
 export type SnakeConfig = {
   map: string[];
   tile: number;
@@ -122,24 +137,22 @@ export class Snake {
     });
   }
 
+  // Единая точка запроса направления с бизнес-правилами
+  private requestDirection(dir: Dir) {
+    if (dir === "up" && this.allInOneColumn()) {
+      // блокируем шаг и делаем короткий прыжок в step()
+      this.skipNextStepWithBounce = true;
+      return;
+    }
+    this.nextDir = dir;
+  }
+
   // Публичный метод для мобильного/мышиного ввода: один шаг в заданном направлении
   // Использует ту же логику ограничений, что и клавиши-стрелки
   inputDirection(dir: "up" | "down" | "left" | "right") {
     if (this.won) return;
     if (this.isMoving) return;
-    if (dir === "up") {
-      if (this.allInOneColumn()) {
-        this.skipNextStepWithBounce = true;
-      } else {
-        this.nextDir = "up";
-      }
-    } else if (dir === "down") {
-      this.nextDir = "down";
-    } else if (dir === "left") {
-      this.nextDir = "left";
-    } else if (dir === "right") {
-      this.nextDir = "right";
-    }
+    this.requestDirection(dir);
     this.step();
   }
 
@@ -147,137 +160,125 @@ export class Snake {
     if (ev.repeat) return; // без автоповтора — один шаг на нажатие
     if (this.won) return; // победа — блокируем дальнейшее управление
     if (this.isMoving) return; // во время анимации новые шаги игнорируем
-    switch (ev.key) {
-      case "ArrowUp":
-        if (this.allInOneColumn()) {
-          // блокируем шаг и делаем короткий прыжок в step()
-          this.skipNextStepWithBounce = true;
-        } else {
-          this.nextDir = "up";
-        }
-        break;
-      case "ArrowDown":
-        this.nextDir = "down";
-        break;
-      case "ArrowLeft":
-        this.nextDir = "left";
-        break;
-      case "ArrowRight":
-        this.nextDir = "right";
-        break;
-      default:
-        return;
-    }
+    const keyToDir: Record<string, Dir | undefined> = {
+      ArrowUp: "up",
+      ArrowDown: "down",
+      ArrowLeft: "left",
+      ArrowRight: "right",
+    };
+    const dir = keyToDir[ev.key];
+    if (!dir) return;
+    this.requestDirection(dir);
     // выполняем один шаг размером в клетку
     this.step();
   }
-
+  // Основной шаг: упорядоченный пайплайн из небольших операций
   private async step() {
-    // Если змейка полностью вертикальна и предыдущая команда "вверх" была запрещена —
-    // не засчитываем шаг и делаем лёгкий прыжок (полклетки вверх и обратно)
+    // 1) Специальный bounce-кейс: короткая анимация без изменения модели
     if (this.skipNextStepWithBounce) {
-      this.skipNextStepWithBounce = false;
-      this.isMoving = true;
-      await this.animateBounceHalf();
-      this.isMoving = false;
+      await this.performBounce();
       return;
     }
     if (this.snake.length === 0) return;
-    const opposite: Record<Dir, Dir> = {
-      up: "down",
-      down: "up",
-      left: "right",
-      right: "left",
-    };
-    if (this.nextDir !== opposite[this.dir]) this.dir = this.nextDir;
 
-    const head = this.snake[0];
-    const { dx, dy } = this.dirDelta(this.dir);
-    const next = { x: head.x + dx, y: head.y + dy };
+    // 2) Обновляем курс; если запрос противоположен текущему — отменяем шаг
+    if (this.nextDir === OPPOSITE_DIR[this.dir]) return;
+    this.dir = this.nextDir;
 
-    if (next.x < 0 || next.y < 0 || next.x >= this.cols || next.y >= this.rows)
-      return;
-    const nextKey = keyFor(next.x, next.y);
-    if (this.walls.has(nextKey)) return;
-    // запрет столкновения с телом (включая хвост)
-    if (this.snake.some((s, i) => i !== 0 && s.x === next.x && s.y === next.y))
-      return;
+    // 3) Планируем перемещение: вычисляем новую голову и валидируем
+    const plan = this.planMove(this.dir);
+    if (!plan) return; // недопустимо: стена/границы/самоукус
 
-    const targetHasApple = this.applesMgr?.hasAt(next.x, next.y) ?? false;
-    const newSnake: Cell[] = [
-      next,
-      ...this.snake.slice(
-        0,
-        targetHasApple ? this.snake.length : this.snake.length - 1
-      ),
-    ];
-
+    // 4) Анимация и фиксация модели
     this.isMoving = true;
-    await this.animateMove(newSnake, targetHasApple);
-    // Сообщаем об успешно завершённом шаге (после анимации перемещения)
+    await this.animateMove(plan.newSnake, plan.grew);
     this.scene.events.emit("snakeStep");
 
-    // Мгновенная победа до гравитации: если портал активен и голова на портале
-    if (
-      this.portal &&
-      (this.applesMgr?.count() ?? 0) === 0 &&
-      newSnake[0].x === this.portal.x &&
-      newSnake[0].y === this.portal.y
-    ) {
-      this.scene.cameras.main.flash(200, 255, 255, 180);
-      this.won = true;
-      // Остановить таймер при победе
-      stopTimer();
-      // Сообщаем внешним сценам (HUD) о победе
-      this.scene.events.emit("levelWin");
-      this.lastDir = this.dir;
-      this.isMoving = false;
+    // 5) Победа до гравитации (например, портал под головой)
+    if (this.isWinPosition(plan.newSnake[0])) {
+      this.handleWin();
       return;
     }
 
-    // Основная гравитация
-    const { out: out1 } = await this.applySnakeGravity(false);
-    if (out1) {
-      this.isMoving = false;
-      this.onFallOffBottom();
-      return;
-    }
-    // Доп. гравитация на повороте (bridge_mode)
+    // 6) Основная гравитация
+    if (await this.applyGravityOrDie(false)) return;
+
+    // 7) Доп. гравитация при повороте (bridge mode)
     if (this.lastDir && this.dir !== this.lastDir) {
-      const { out: outTurn } = await this.applySnakeGravity(true);
-      if (outTurn) {
-        this.lastDir = this.dir;
-        this.isMoving = false;
-        this.onFallOffBottom();
-        return;
-      }
+      if (await this.applyGravityOrDie(true)) return;
     }
 
-    // Поедание яблока и активация портала (после гравитации)
-    if (targetHasApple) {
-      const head = this.snake[0];
-      if (this.applesMgr?.hasAt(head.x, head.y)) {
-        this.applesMgr.eatAt(head.x, head.y);
-        // Доп. гравитация после исчезновения опоры (яблоко могло держать)
-        const { out: outAfterEat } = await this.applySnakeGravity(false);
-        if (outAfterEat) {
-          this.isMoving = false;
-          this.onFallOffBottom();
-          return;
-        }
-      }
-    }
+    // 8) Поедание яблока и потенциальная доп. гравитация после исчезновения опоры
+    if (plan.grew) await this.consumeAppleAndMaybeFall();
 
-    // Финальная проверка портала
-    if (!this.won && this.isWinPosition(this.snake[0])) {
-      this.won = true;
-      this.flashWin();
-      // Остановить таймер при победе
-      stopTimer();
-      this.scene.events.emit("levelWin");
-    }
+    // 9) Финальная проверка портала
+    if (!this.won && this.isWinPosition(this.snake[0])) this.handleWin();
+
+    // 10) Сохранение направления и завершение шага
     this.lastDir = this.dir;
     this.isMoving = false;
+  }
+
+  // Подготовка перемещения и валидация следующей клетки
+  private planMove(dir: Dir): { next: Cell; grew: boolean; newSnake: Cell[] } | null {
+    const head = this.snake[0];
+    const { dx, dy } = DIR_DELTAS[dir];
+    const next = { x: head.x + dx, y: head.y + dy };
+    if (!this.isInsideMap(next)) return null;
+    if (this.isWall(next)) return null;
+    if (this.isSelfCollision(next)) return null;
+    const grew = this.applesMgr?.hasAt(next.x, next.y) ?? false;
+    const newSnake: Cell[] = [
+      next,
+      ...this.snake.slice(0, grew ? this.snake.length : this.snake.length - 1),
+    ];
+    return { next, grew, newSnake };
+  }
+
+  private isInsideMap(p: Cell): boolean {
+    return p.x >= 0 && p.y >= 0 && p.x < this.cols && p.y < this.rows;
+  }
+
+  private isWall(p: Cell): boolean {
+    return this.walls.has(keyFor(p.x, p.y));
+  }
+
+  private isSelfCollision(p: Cell): boolean {
+    return this.snake.some((s, i) => i !== 0 && s.x === p.x && s.y === p.y);
+  }
+
+  private async performBounce() {
+    this.skipNextStepWithBounce = false;
+    this.isMoving = true;
+    await this.animateBounceHalf();
+    this.isMoving = false;
+  }
+
+  private async applyGravityOrDie(bridgeMode: boolean): Promise<boolean> {
+    const { out } = await this.applySnakeGravity(bridgeMode);
+    if (out) {
+      this.isMoving = false;
+      this.onFallOffBottom();
+      return true;
+    }
+    return false;
+  }
+
+  private handleWin() {
+    this.won = true;
+    this.flashWin();
+    stopTimer();
+    this.scene.events.emit("levelWin");
+    this.lastDir = this.dir;
+    this.isMoving = false;
+  }
+
+  private async consumeAppleAndMaybeFall() {
+    const head = this.snake[0];
+    if (this.applesMgr?.hasAt(head.x, head.y)) {
+      this.applesMgr.eatAt(head.x, head.y);
+      await this.applyGravityOrDie(false);
+    }
   }
 
   // Падение за нижнюю границу: красная вспышка и рестарт уровня
@@ -320,7 +321,7 @@ export class Snake {
       this.snakeLayer.add(img);
       this.snakeSprites.push(img);
     }
-    this.applyTexturesAndAngles();
+    // removed applyTexturesAndAngles()
   }
 
   private animateMove(newSnake: Cell[], grew: boolean): Promise<void> {
@@ -391,7 +392,6 @@ export class Snake {
 
   private finishMove(newSnake: Cell[]) {
     this.snake = newSnake;
-    this.applyTexturesAndAngles();
     // Победа: активный портал и голова совпадает
   }
 
@@ -410,33 +410,19 @@ export class Snake {
   // --- Local snake textures: simple colored squares ---
   private ensureSnakeTextures() {
     const keyHead = TEXTURE_KEYS.snakeHead;
-    const keyBlue = TEXTURE_KEYS.snakeBodyBlue;
-    const keySky = TEXTURE_KEYS.snakeBodySky;
+    const keyBody = TEXTURE_KEYS.snakeBody;
     const s = this.texSize();
     ensureSquareTexture(this.scene, keyHead, s, COLORS.snake.head);
-    ensureSquareTexture(this.scene, keyBlue, s, COLORS.snake.blue);
-    ensureSquareTexture(this.scene, keySky, s, COLORS.snake.sky);
+    ensureSquareTexture(this.scene, keyBody, s, COLORS.snake.body);
   }
 
   // Выбор ключа текстуры по индексу сегмента
   private texKeyForIndex(i: number): string {
     if (i === 0) return TEXTURE_KEYS.snakeHead;
-    return i % 2 === 0 ? TEXTURE_KEYS.snakeBodyBlue : TEXTURE_KEYS.snakeBodySky;
+    return TEXTURE_KEYS.snakeBody;
   }
 
-  private dirDelta(d: Dir): { dx: number; dy: number } {
-    switch (d) {
-      case "up":
-        return { dx: 0, dy: -1 };
-      case "down":
-        return { dx: 0, dy: 1 };
-      case "left":
-        return { dx: -1, dy: 0 };
-      case "right":
-      default:
-        return { dx: 1, dy: 0 };
-    }
-  }
+  // dirDelta inlined by DIR_DELTAS
 
   private portalActive(): boolean {
     return (this.applesMgr?.count() ?? 0) === 0;
@@ -569,43 +555,5 @@ export class Snake {
     });
   }
 
-  // ---------- Orientation helpers ----------
-  private idxAngle(i: number): number {
-    const n = this.snake.length;
-    if (n === 0) return 0;
-    const degFromVec = (dx: number, dy: number) => {
-      if (dx === 1 && dy === 0) return 0; // right
-      if (dx === -1 && dy === 0) return 180; // left
-      if (dx === 0 && dy === 1) return 90; // down
-      if (dx === 0 && dy === -1) return -90; // up
-      return 0;
-    };
-    if (i === 0 && n >= 2) {
-      const a = this.snake[1];
-      const b = this.snake[0];
-      return degFromVec(b.x - a.x, b.y - a.y);
-    }
-    if (i === n - 1 && n >= 2) {
-      const a = this.snake[n - 2];
-      const b = this.snake[n - 1];
-      return degFromVec(b.x - a.x, b.y - a.y);
-    }
-    if (i > 0 && i < n - 1) {
-      const a = this.snake[i - 1];
-      const c = this.snake[i + 1];
-      // axis-based orientation (straight segments)
-      if (a.x === c.x) return 90; // vertical
-      return 0; // horizontal or corner
-    }
-    return 0;
-  }
-
-  private applyTexturesAndAngles() {
-    for (let i = 0; i < this.snakeSprites.length; i++) {
-      const sprite = this.snakeSprites[i];
-      const key = this.texKeyForIndex(i);
-      if (sprite.texture.key !== key) sprite.setTexture(key);
-      sprite.setAngle(this.idxAngle(i));
-    }
-  }
+  // applyTexturesAndAngles() and idxAngle() removed by request
 }

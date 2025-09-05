@@ -3,8 +3,7 @@ export const TEXTURE_KEYS = {
   block: "block",
   apple: "apple",
   snakeHead: "snake_head",
-  snakeBodyBlue: "snake_body_blue",
-  snakeBodySky: "snake_body_sky",
+  snakeBody: "snake_body",
   portalActive: "portal_active",
   portalInactive: "portal_inactive",
 } as const;
@@ -16,8 +15,7 @@ export const COLORS = {
   apple: 0xe74c3c,
   snake: {
     head: 0x1ddb6c,
-    blue: 0x1e8247,
-    sky: 0x1e8247,
+    body: 0x1e8247,
   },
   portal: {
     active: 0xf0d46a,
